@@ -28,12 +28,15 @@ let viewer = null
 let scene = null
 // let handler = null
 let drawMethod = null
+var pointCollection
+var debounceTimeout
 const label = { name: '棒球公园', lonlat: [121.166493, 39.9060534], color: Cesium.Color.RED, font: "14pt monospace" }
 const billboard = { name: 'ACE女王', lonlat: [121.166493, 38.9060534], image: "../../public/th.png", font: "14pt monospace" }
 
+
 onMounted(() => {
-  initMap()
   console.log("点--")
+  initMap()
   drawMethod = new Draw(viewer)
   // console.log(drawMethod.drawPoint())
 })
@@ -42,16 +45,262 @@ function initMap() {
   viewer = new Cesium.Viewer("cesiumMap", {
     selectionIndicator: true,//选择实体标记
     infoBox: false,//信息窗体
+    // windowPosition: {
+    //   x: 0,
+    //   y: 0
+    // },
   })
-
+  // 绑定点击事件，用于拾取点
+  var handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  // 创建一个 PointPrimitiveCollection
+  pointCollection = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+  debounceTimeout = null;
   scene = viewer.scene;
   if (!scene.pickPositionSupported) {
     window.alert("此浏览器不支持 pickPosition。");
     return
   }
+  var point = viewer.entities.add({
+    position: Cesium.Cartesian3.fromDegrees(116.407396, 39.904200), // 经度、纬度
+    point: {
+      pixelSize: 10, // 点的大小
+      color: Cesium.Color.RED, // 点的颜色
+      outlineColor: Cesium.Color.WHITE, // 边缘颜色
+      outlineWidth: 2 // 边缘宽度
+    },
+    label: {
+      text: '北京', // 标签文本
+      font: '16px sans-serif',
+      fillColor: Cesium.Color.WHITE,
+      outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 2,
+      verticalOrigin: Cesium.VerticalOrigin.TOP // 标签位置
+    }
+  });
+
+  handler.setInputAction(function (event) {
+    // 获取鼠标点击位置的屏幕坐标
+    var pickedObject = viewer.scene.pick(event.position);
+    // 判断是否拾取到了实体
+    if (Cesium.defined(pickedObject)) {
+      // 输出拾取到的对象
+      console.log('拾取到的对象:', pickedObject);
+      // 如果是 WMS 图层，可能需要进一步处理
+      // 这里可以实现基于点击位置获取点的相关数据
+      // 例如，发送请求到 WFS 获取该点的详细信息
+    } else {
+      console.log('未拾取到任何实体');
+    }
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+  // WMS
+  // viewer.imageryLayers.addImageryProvider(new Cesium.WebMapServiceImageryProvider({
+  //   url: '/api/geoserver/wms',
+  //   layers: 'cite:poi',
+  //   parameters: {
+  //     service: 'WMS',
+  //     format: 'image/png',
+  //     transparent: true
+  //   }
+  // }));
+  arrow2()
+  // 绑定视图变化事件 缩放展示点
+  // viewer.camera.changed.addEventListener(function () {
+  //   debounceLoadWFSLayers()
+  // });
   moveCoordinate(viewer)//鼠标移动显示坐标
   // setupLeftClickHandler(viewer)//左击获取坐标/实体
   // info()//指定实体显示信息框体
+}
+// 2.画箭头线条 创建线的起始和结束坐标
+function arrow2() {
+  // 假设已经有Cesium.Viewer实例叫做viewer
+
+  // 定义线的两个顶点
+  var start = Cesium.Cartesian3.fromDegrees(-75.59777, 40.03883);
+  var end = Cesium.Cartesian3.fromDegrees(-75.59777, 39.95833);
+
+  // 创建一个Polyline实体，带箭头
+  var polylineArrow = viewer.entities.add({
+    polyline: {
+      positions: [start, end], // 线的位置数组
+      width: 15, // 线的宽度
+      material: new Cesium.PolylineArrowMaterialProperty(Cesium.Color.PINK), // 使用带箭头的材质
+      clampToGround: true // 是否贴地
+    }
+  });
+  // 将视角移动到这条线
+  viewer.zoomTo(polylineArrow);
+}
+function arrow1() {
+  // 假设已经有Cesium.Viewer实例叫做viewer
+
+  // 定义线的两个顶点
+  var start = Cesium.Cartesian3.fromDegrees(-75.59777, 40.03883);
+  var end = Cesium.Cartesian3.fromDegrees(-75.59777, 39.95833);
+
+  // 创建虚线部分
+  var pp = viewer.entities.add({
+    polyline: {
+      positions: [start, end], // 线的位置数组
+      width: 5, // 线的宽度
+      material: new Cesium.PolylineDashMaterialProperty({
+        color: Cesium.Color.PINK, // 虚线的颜色
+        dashLength: 16 // 控制虚线的长度
+      }),
+      clampToGround: true // 是否贴地
+    }
+  });
+
+  // 计算箭头的方向和尺寸
+  var arrowLength = 0.5; // 箭头长度，适当缩小
+  var arrowWidth = 0.2; // 箭头宽度，适当缩小
+  var direction = Cesium.Cartesian3.subtract(end, start, new Cesium.Cartesian3());
+  Cesium.Cartesian3.normalize(direction, direction);
+
+  // 计算箭头的尖端和基底
+  var arrowTip = end;
+  var basePoint = Cesium.Cartesian3.add(end, Cesium.Cartesian3.multiplyByScalar(direction, -arrowLength, new Cesium.Cartesian3()), new Cesium.Cartesian3());
+  var rightBase = Cesium.Cartesian3.add(basePoint, Cesium.Cartesian3.multiplyByScalar(Cesium.Cartesian3.cross(direction, Cesium.Cartesian3.UNIT_Z, new Cesium.Cartesian3()), arrowWidth, new Cesium.Cartesian3()), new Cesium.Cartesian3());
+  var leftBase = Cesium.Cartesian3.subtract(basePoint, Cesium.Cartesian3.multiplyByScalar(Cesium.Cartesian3.cross(direction, Cesium.Cartesian3.UNIT_Z, new Cesium.Cartesian3()), arrowWidth, new Cesium.Cartesian3()), new Cesium.Cartesian3());
+
+  // 添加箭头（使用三角形）
+  viewer.entities.add({
+    polygon: {
+      hierarchy: new Cesium.PolygonHierarchy([arrowTip, leftBase, rightBase]),
+      material: Cesium.Color.RED
+    }
+  });
+
+
+  // 将视角移动到这条线
+  viewer.zoomTo(pp);
+
+}
+function arrow() {
+
+  const start = Cesium.Cartesian3.fromDegrees(-75.59777, 40.03883);
+  const end = Cesium.Cartesian3.fromDegrees(-75.5, 40.05);
+
+  // 添加虚线实体
+  const dashedLine = viewer.entities.add({
+    name: 'Dashed Line',
+    polyline: {
+      positions: [start, end],
+      width: 5,
+      material: new Cesium.PolylineDashMaterialProperty({
+        dashLength: 16,
+        gapLength: 8,
+        color: Cesium.Color.RED.withAlpha(0.5),
+      })
+    }
+  });
+
+  // 计算箭头位置
+  const arrowPosition = Cesium.Cartesian3.fromDegrees(-75.55, 40.045);
+
+  // 添加箭头
+  viewer.entities.add({
+    position: arrowPosition,
+    billboard: {
+      image: 'path/to/arrow.png', // 替换为箭头图标的路径
+      width: 20,
+      height: 20,
+      verticalOrigin: Cesium.VerticalOrigin.CENTER,
+      horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+    }
+  });
+
+  // 将视角移动到这条线
+  viewer.zoomTo(dashedLine);
+}
+
+//1.WFS 防抖函数，用来延迟执行加载数据的操作
+function debounceLoadWFSLayers() {
+  if (debounceTimeout) {
+    clearTimeout(debounceTimeout);
+  }
+
+  debounceTimeout = setTimeout(function () {
+    // 清空之前的点
+    pointCollection.removeAll();
+    var boundingBox = getVisibleBoundingBox(viewer);
+    loadWFSLayers(boundingBox);
+  }, 1000);  // 延迟1秒执行请求
+}
+// WFS 根据视图范围加载数据的函数  
+function loadWFSLayers(boundingBox) {
+  var wfsUrl = '/api/geoserver/wfs';
+  var params = {
+    service: 'WFS',
+    version: '1.0.0',
+    request: 'GetFeature',
+    // typeName: 'tiger:poi',
+    typeName: 'cite:poi',
+    outputFormat: 'application/json',
+    srsName: 'EPSG:4326',
+    bbox: boundingBox // 传递视图范围
+  };
+
+  // 发送请求
+  var queryString = Object.keys(params).map(key => key + '=' + encodeURIComponent(params[key])).join('&');
+  var requestUrl = wfsUrl + '?' + queryString;
+
+  fetch(requestUrl)
+    .then(response => response.json())
+    .then(geoJson => {
+      // 加载数据到 Cesium
+      if (geoJson) {
+        // 假设 GeoJSON 里有多个点
+        geoJson.features.forEach(feature => {
+          var coordinates = feature.geometry.coordinates;
+
+          // 添加点到 PointPrimitiveCollection 中
+          pointCollection.add({
+            position: Cesium.Cartesian3.fromDegrees(coordinates[0], coordinates[1]),
+            color: Cesium.Color.RED,
+            pixelSize: 10 // 设置点的大小
+          });
+        });
+      }
+      return
+      // 清空之前的数据以避免重复
+      viewer.dataSources.removeAll();
+      console.log('dpc')
+      Cesium.GeoJsonDataSource.load(geoJson, {
+        stroke: Cesium.Color.YELLOW
+      })
+        .then(function (dataSource) {
+          viewer.dataSources.add(dataSource);
+          // 添加样式和其他逻辑
+          const entities = dataSource.entities.values
+          for (let i = 0; i < entities.length; i++) {
+            let entity = entities[i]
+            entity.billboard = undefined
+            entity.point = {
+              pixelSize: 10,
+              color: Cesium.Color.BLUE,
+              // outlineWidth: 2,
+              clampToGround: true
+            }
+          }
+        });
+    })
+    .catch(error => {
+      console.error('获取WFS数据时出错:', error);
+    });
+}
+
+//WFS 获取可见的边界框
+function getVisibleBoundingBox(viewer) {
+  var extent = viewer.camera.computeViewRectangle();
+  // 将弧度转换为经纬度
+  var west = Cesium.Math.toDegrees(extent.west);
+  var south = Cesium.Math.toDegrees(extent.south);
+  var east = Cesium.Math.toDegrees(extent.east);
+  var north = Cesium.Math.toDegrees(extent.north);
+  return `${west},${south},${east},${north}`;
+  // return `${extent.west},${extent.south},${extent.east},${extent.north}`;
 }
 function addG() {//添加 geo
   drawMethod.removeAll()

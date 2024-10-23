@@ -10,6 +10,11 @@ const router = createRouter({
       component: HomeView
     },
     {
+      path: '/hydrometeorview',
+      name: 'hydrometeorview',
+      component: () => import('../views/HydrometeorView.vue')
+    },
+    {
       path: '/cetest',
       name: 'cetest',
       component: () => import('../views/CeTest.vue')
